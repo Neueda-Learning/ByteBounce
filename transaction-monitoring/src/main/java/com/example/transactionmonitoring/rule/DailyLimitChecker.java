@@ -4,6 +4,7 @@ import com.example.transactionmonitoring.entity.Rule;
 import com.example.transactionmonitoring.entity.RuleType;
 import com.example.transactionmonitoring.entity.Transaction;
 import com.example.transactionmonitoring.repository.TransactionRepository;
+import com.example.transactionmonitoring.service.CurrencyConversionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ import java.time.LocalTime;
 public class DailyLimitChecker implements RuleChecker {
 
     private final TransactionRepository transactionRepository;
+    private final CurrencyConversionService currencyConversionService;
 
     @Override
     public boolean check(Transaction transaction, Rule rule) {
@@ -39,9 +41,12 @@ public class DailyLimitChecker implements RuleChecker {
                                 dayStart,
                                 dayEnd
                         )
-                        .stream()
-                        .map(Transaction::getAmount)
-                        .filter(amount -> amount != null)
+                .stream()
+                .filter(savedTransaction -> savedTransaction.getAmount() != null)
+                .map(savedTransaction -> currencyConversionService.convertToBase(
+                    savedTransaction.getAmount(),
+                    savedTransaction.getCurrency()
+                ))
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return dailyTotal.compareTo(rule.getThreshold()) > 0;

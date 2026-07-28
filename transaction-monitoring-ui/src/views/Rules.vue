@@ -9,6 +9,7 @@ import {
   SwitchButton,
 } from '@element-plus/icons-vue'
 import http from '../api/axios'
+import { formatDateTime } from '../utils/dateTime'
 
 const rules = ref([])
 const loading = ref(false)
@@ -296,11 +297,11 @@ onMounted(loadRules)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column
-        prop="createdTime"
-        label="Created Time"
-        min-width="190"
-      />
+      <el-table-column label="Created Time" min-width="190">
+        <template #default="{ row }">
+          {{ formatDateTime(row.createdTime) }}
+        </template>
+      </el-table-column>
       <el-table-column label="Actions" width="300" fixed="right">
         <template #default="{ row }">
           <div class="action-buttons">
@@ -394,14 +395,19 @@ onMounted(loadRules)
           label="Threshold"
           required
         >
-          <el-input-number
-            v-model="ruleForm.threshold"
-            class="form-control"
-            :min="0.01"
-            :precision="2"
-            :controls="false"
-            placeholder="Enter threshold"
-          />
+          <div class="threshold-field">
+            <el-input-number
+              v-model="ruleForm.threshold"
+              class="form-control"
+              :min="0.01"
+              :precision="2"
+              :controls="false"
+              placeholder="Enter threshold"
+            />
+            <div class="field-hint">
+              Amount-based thresholds are compared in the base currency (USD).
+            </div>
+          </div>
         </el-form-item>
 
         <template v-if="ruleForm.type === 'VELOCITY'">
@@ -504,6 +510,17 @@ onMounted(loadRules)
   padding: 0 18px;
   border-radius: 10px;
   box-shadow: 0 7px 16px rgb(37 99 235 / 20%);
+}
+
+.threshold-field {
+  width: 100%;
+}
+
+.field-hint {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .rules-error {
