@@ -85,15 +85,39 @@ class DailyLimitCheckerIntegrationTest {
                 .isEmpty();
     }
 
+    @Test
+    void shouldGenerateAlertWhenMixedCurrenciesExceedThresholdAfterConversion() {
+        String accountId = uniqueAccountId();
+
+        createTransaction(accountId, "30000", "USD");
+        TransactionResponse triggeringTransaction =
+                createTransaction(accountId, "200000", "CNY");
+
+        assertThat(alertRepository.findAll())
+                .filteredOn(alert -> isDailyLimitAlertFor(
+                        alert,
+                        triggeringTransaction.id()
+                ))
+                .hasSize(1);
+    }
+
     private TransactionResponse createTransaction(
             String accountId,
             String amount
+    ) {
+        return createTransaction(accountId, amount, "USD");
+    }
+
+    private TransactionResponse createTransaction(
+            String accountId,
+            String amount,
+            String currency
     ) {
         return transactionService.createTransaction(new TransactionRequest(
                 accountId,
                 "PAYEE-" + UUID.randomUUID(),
                 new BigDecimal(amount),
-                "USD",
+                currency,
                 "DEBIT",
                 "Daily limit integration test"
         ));

@@ -12,6 +12,7 @@ import {
 } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import http from '../api/axios'
+import { formatDateTime, parseUtcAwareDate, toTimestamp } from '../utils/dateTime'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -94,10 +95,7 @@ const updateRecentAlerts = (alerts, transactions) => {
         return severityDifference
       }
 
-      return (
-        new Date(right.createdTime).getTime() -
-        new Date(left.createdTime).getTime()
-      )
+      return toTimestamp(right.createdTime) - toTimestamp(left.createdTime)
     })
     .slice(0, 5)
     .map((alert) => {
@@ -119,11 +117,7 @@ const formatUpdatedTime = (date) =>
   })
 
 const formatAlertTime = (value) => {
-  if (!value) {
-    return '—'
-  }
-
-  return new Date(value).toLocaleString()
+  return formatDateTime(value)
 }
 
 const severityTagType = (severity) =>
@@ -157,7 +151,10 @@ const buildHourlyTrend = (transactions) => {
   const hourlyAmounts = new Map()
 
   transactions.forEach((transaction) => {
-    const hour = new Date(transaction.transactionTime)
+    const hour = parseUtcAwareDate(transaction.transactionTime)
+    if (!hour) {
+      return
+    }
     hour.setMinutes(0, 0, 0)
     const timestamp = hour.getTime()
     hourlyAmounts.set(

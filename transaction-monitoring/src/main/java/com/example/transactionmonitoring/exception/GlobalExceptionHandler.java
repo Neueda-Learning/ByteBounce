@@ -71,4 +71,16 @@ public class GlobalExceptionHandler {
         problem.setTitle("Invalid rule configuration");
         return ResponseEntity.badRequest().body(problem);
     }
+
+        @ExceptionHandler(UnsupportedCurrencyException.class)
+        public ResponseEntity<ProblemDetail> handleUnsupportedCurrency(
+                        UnsupportedCurrencyException exception
+        ) {
+                ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                                HttpStatus.BAD_REQUEST,
+                                exception.getMessage()
+                );
+                problem.setTitle("Unsupported currency");
+                return ResponseEntity.badRequest().body(problem);
+        }
 }
