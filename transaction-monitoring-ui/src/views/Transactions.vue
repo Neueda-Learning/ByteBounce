@@ -30,6 +30,7 @@ const transactionTypeTag = {
 }
 
 const transactionTypeOptions = ['DEBIT', 'CREDIT', 'TRANSFER', 'PAYMENT']
+const currencyOptions = ['USD', 'CNY', 'EUR']
 
 const emptyForm = () => ({
   accountId: '',
@@ -53,12 +54,7 @@ const formRules = {
     { required: true, message: 'Amount is required', trigger: 'blur' },
   ],
   currency: [
-    { required: true, message: 'Currency is required', trigger: 'blur' },
-    {
-      pattern: /^[A-Za-z]{3}$/,
-      message: 'Currency must be a 3-letter code',
-      trigger: 'blur',
-    },
+    { required: true, message: 'Currency is required', trigger: 'change' },
   ],
   type: [
     { required: true, message: 'Transaction type is required', trigger: 'change' },
@@ -398,11 +394,18 @@ onMounted(loadTransactions)
         </el-form-item>
 
         <el-form-item label="Currency" prop="currency">
-          <el-input
+          <el-select
             v-model="transactionForm.currency"
-            maxlength="3"
-            placeholder="Enter 3-letter currency code"
-          />
+            class="form-control"
+            placeholder="Select currency"
+          >
+            <el-option
+              v-for="currency in currencyOptions"
+              :key="currency"
+              :label="currency"
+              :value="currency"
+            />
+          </el-select>
         </el-form-item>
 
         <el-form-item label="Type" prop="type">
