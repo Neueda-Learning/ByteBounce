@@ -27,6 +27,8 @@ const statistics = reactive({
   totalAmount: 0,
   totalAlerts: 0,
   openAlerts: 0,
+  baseCurrency: 'USD',
+  exchangeRates: {},
 })
 
 const riskOverview = reactive({
@@ -45,10 +47,28 @@ const riskLevelClass = computed(() =>
   riskOverview.level.toLowerCase().replace(' ', '-'),
 )
 
+const baseCurrencyLabel = computed(() => statistics.baseCurrency || 'USD')
+
 const formatNumber = (value) =>
   Number(value || 0).toLocaleString(undefined, {
     maximumFractionDigits: 2,
   })
+
+const normalizeCurrency = (currency) =>
+  typeof currency === 'string' ? currency.trim().toUpperCase() : ''
+
+const convertToBaseCurrency = (amount, currency) => {
+  const numericAmount = Number(amount || 0)
+  const normalizedCurrency = normalizeCurrency(currency)
+  const normalizedBaseCurrency = normalizeCurrency(baseCurrencyLabel.value)
+
+  if (!normalizedCurrency || normalizedCurrency === normalizedBaseCurrency) {
+    return numericAmount
+  }
+
+  const rate = Number(statistics.exchangeRates?.[normalizedCurrency])
+  return Number.isFinite(rate) ? numericAmount * rate : numericAmount
+}
 
 const countBy = (items, field) =>
   items.reduce((counts, item) => {
@@ -159,7 +179,8 @@ const buildHourlyTrend = (transactions) => {
     const timestamp = hour.getTime()
     hourlyAmounts.set(
       timestamp,
-      (hourlyAmounts.get(timestamp) || 0) + Number(transaction.amount),
+      (hourlyAmounts.get(timestamp) || 0) +
+        convertToBaseCurrency(transaction.amount, transaction.currency),
     )
   })
 
@@ -198,7 +219,7 @@ const renderTransactionTrend = (transactions) => {
         const point = parameters[0]
         return [
           `<strong>${formatTrendTime(point.value[0], true)}</strong>`,
-          `Transaction Amount: ¥${formatNumber(point.value[1])}`,
+          `Transaction Amount: ${formatNumber(point.value[1])} ${baseCurrencyLabel.value}`,
         ].join('<br>')
       },
     },
@@ -572,9 +593,12 @@ onBeforeUnmount(() => {
             <div class="statistic-label">Transaction Amount</div>
           </div>
           <div class="statistic-value">
-            {{ formatNumber(statistics.totalAmount) }}
+              {{ formatNumber(statistics.totalAmount) }}
+              {{ baseCurrencyLabel }}
           </div>
-          <div class="statistic-description">Total transaction volume</div>
+            <div class="statistic-description">
+              Total transaction volume in {{ baseCurrencyLabel }} equivalent
+            </div>
         </div>
       </el-card>
 
@@ -662,7 +686,7 @@ onBeforeUnmount(() => {
             </span>
             <div>
               <strong>Transaction Activity</strong>
-              <small>Hourly monitored transactions</small>
+              <small>Hourly monitored volume in {{ baseCurrencyLabel }}</small>
             </div>
           </div>
         </template>
