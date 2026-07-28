@@ -15,7 +15,6 @@ import com.example.transactionmonitoring.repository.RuleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +52,9 @@ public class AlertService {
 
     @Transactional(readOnly = true)
     public PageResponse<AlertResponse> getAllAlerts(int page, int size) {
-        Page<Alert> alerts = alertRepository.findAll(pageRequest(page, size));
+        Page<Alert> alerts = alertRepository.findAllByRiskPriority(
+                pageRequest(page, size)
+        );
         return toPageResponse(alerts);
     }
 
@@ -110,8 +111,7 @@ public class AlertService {
     private static PageRequest pageRequest(int page, int size) {
         return PageRequest.of(
                 Math.max(page, 0),
-                Math.max(size, 1),
-                Sort.by(Sort.Direction.DESC, "createdTime")
+                Math.max(size, 1)
         );
     }
 
