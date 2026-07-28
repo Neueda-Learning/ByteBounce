@@ -1,0 +1,10 @@
+# 忽略后端编译产物
+transaction-monitoring/target/
+*.class
+
+# 忽略前端依赖包
+transaction-monitoring-ui/node_modules/
+
+# 忽略编辑器配置
+.vscode/
+.idea/

@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import http from '../api/axios'
+import { formatDateTime } from '../utils/dateTime'
 
 const historyRecords = ref([])
 const loading = ref(false)
@@ -89,11 +90,11 @@ onMounted(loadHistory)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column
-        prop="changedTime"
-        label="Changed Time"
-        min-width="210"
-      />
+      <el-table-column label="Changed Time" min-width="210">
+        <template #default="{ row }">
+          {{ formatDateTime(row.changedTime) }}
+        </template>
+      </el-table-column>
     </el-table>
     <div class="pagination-wrapper">
       <el-pagination

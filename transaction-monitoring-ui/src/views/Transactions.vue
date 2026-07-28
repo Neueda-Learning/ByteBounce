@@ -3,6 +3,7 @@ import { nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CreditCard, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import http from '../api/axios'
+import { formatDateTime } from '../utils/dateTime'
 
 const transactions = ref([])
 const loading = ref(false)
@@ -324,11 +325,11 @@ onMounted(loadTransactions)
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column
-          prop="transactionTime"
-          label="Transaction Time"
-          min-width="190"
-        />
+        <el-table-column label="Transaction Time" min-width="190">
+          <template #default="{ row }">
+            {{ formatDateTime(row.transactionTime) }}
+          </template>
+        </el-table-column>
         <el-table-column
           prop="description"
           label="Description"

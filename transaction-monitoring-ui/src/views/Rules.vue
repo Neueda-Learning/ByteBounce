@@ -9,6 +9,7 @@ import {
   SwitchButton,
 } from '@element-plus/icons-vue'
 import http from '../api/axios'
+import { formatDateTime } from '../utils/dateTime'
 
 const rules = ref([])
 const loading = ref(false)
@@ -296,11 +297,11 @@ onMounted(loadRules)
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column
-        prop="createdTime"
-        label="Created Time"
-        min-width="190"
-      />
+      <el-table-column label="Created Time" min-width="190">
+        <template #default="{ row }">
+          {{ formatDateTime(row.createdTime) }}
+        </template>
+      </el-table-column>
       <el-table-column label="Actions" width="300" fixed="right">
         <template #default="{ row }">
           <div class="action-buttons">

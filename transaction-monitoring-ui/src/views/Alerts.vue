@@ -10,6 +10,7 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import http from '../api/axios'
+import { formatDateTime } from '../utils/dateTime'
 
 const alerts = ref([])
 const loading = ref(false)
@@ -156,9 +157,6 @@ const resetFilters = () => {
   currentPage.value = 1
   loadAlerts()
 }
-
-const formatDateTime = (value) =>
-  value ? value.replace('T', ' ').slice(0, 19) : ''
 
 const formatAmount = (amount, currency) => {
   if (amount == null) {
@@ -537,7 +535,7 @@ onMounted(loadAlerts)
               {{ alertDetails.currency }}
             </el-descriptions-item>
             <el-descriptions-item label="Transaction Time" :span="2">
-              {{ alertDetails.transactionTime }}
+              {{ formatDateTime(alertDetails.transactionTime) }}
             </el-descriptions-item>
           </el-descriptions>
 
