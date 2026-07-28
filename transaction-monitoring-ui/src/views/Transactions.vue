@@ -1,12 +1,15 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CreditCard, Refresh, Search } from '@element-plus/icons-vue'
+import { CreditCard, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import http from '../api/axios'
 
 const transactions = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
+const dialogVisible = ref(false)
+const submitting = ref(false)
+const formRef = ref()
 const currentPage = ref(1)
 const pageSize = ref(10)
 const totalElements = ref(0)
@@ -25,11 +28,103 @@ const transactionTypeTag = {
   PAYMENT: 'warning',
 }
 
+const transactionTypeOptions = ['DEBIT', 'CREDIT', 'TRANSFER', 'PAYMENT']
+
+const emptyForm = () => ({
+  accountId: '',
+  payeeId: '',
+  amount: null,
+  currency: 'CNY',
+  type: 'TRANSFER',
+  description: '',
+})
+
+const transactionForm = reactive(emptyForm())
+
+const formRules = {
+  accountId: [
+    { required: true, message: 'Account ID is required', trigger: 'blur' },
+  ],
+  payeeId: [
+    { required: true, message: 'Payee ID is required', trigger: 'blur' },
+  ],
+  amount: [
+    { required: true, message: 'Amount is required', trigger: 'blur' },
+  ],
+  currency: [
+    { required: true, message: 'Currency is required', trigger: 'blur' },
+    {
+      pattern: /^[A-Za-z]{3}$/,
+      message: 'Currency must be a 3-letter code',
+      trigger: 'blur',
+    },
+  ],
+  type: [
+    { required: true, message: 'Transaction type is required', trigger: 'change' },
+  ],
+}
+
 const formatAmount = (value) =>
   Number(value || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   })
+
+const resetTransactionForm = () => {
+  Object.assign(transactionForm, emptyForm())
+  nextTick(() => formRef.value?.clearValidate())
+}
+
+const openCreateDialog = () => {
+  resetTransactionForm()
+  dialogVisible.value = true
+}
+
+const normalizeCreatePayload = () => ({
+  accountId: transactionForm.accountId.trim(),
+  payeeId: transactionForm.payeeId.trim(),
+  amount: transactionForm.amount,
+  currency: transactionForm.currency.trim().toUpperCase(),
+  type: transactionForm.type,
+  description: transactionForm.description.trim() || null,
+})
+
+const extractErrorMessage = (error, fallback) => {
+  const responseData = error.response?.data
+  const fieldErrors = responseData?.errors
+
+  if (fieldErrors && typeof fieldErrors === 'object') {
+    return Object.values(fieldErrors)[0]
+  }
+
+  return responseData?.detail || responseData?.message || fallback
+}
+
+const createTransaction = async () => {
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid || !(transactionForm.amount > 0)) {
+    if (!(transactionForm.amount > 0)) {
+      ElMessage.warning('Amount must be greater than zero.')
+    }
+    return
+  }
+
+  submitting.value = true
+
+  try {
+    await http.post('/transactions', normalizeCreatePayload())
+    ElMessage.success('Transaction created successfully.')
+    dialogVisible.value = false
+    currentPage.value = 1
+    resetFilters()
+  } catch (error) {
+    ElMessage.error(
+      extractErrorMessage(error, 'Failed to create the transaction.'),
+    )
+  } finally {
+    submitting.value = false
+  }
+}
 
 const loadTransactions = async () => {
   loading.value = true
@@ -121,14 +216,24 @@ onMounted(loadTransactions)
 
 <template>
   <section class="transactions-page">
-    <div class="page-heading">
-      <span class="page-icon">
-        <el-icon><CreditCard /></el-icon>
-      </span>
-      <div>
-        <h1>Transactions</h1>
-        <p>Review every transaction evaluated by monitoring rules.</p>
+    <div class="page-header">
+      <div class="page-heading">
+        <span class="page-icon">
+          <el-icon><CreditCard /></el-icon>
+        </span>
+        <div>
+          <h1>Transactions</h1>
+          <p>Review every transaction evaluated by monitoring rules.</p>
+        </div>
       </div>
+      <el-button
+        type="primary"
+        :icon="Plus"
+        class="create-button"
+        @click="openCreateDialog"
+      >
+        Create Transaction
+      </el-button>
     </div>
 
     <el-alert
@@ -251,15 +356,107 @@ onMounted(loadTransactions)
         />
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="dialogVisible"
+      title="Create Transaction"
+      width="520px"
+      class="management-dialog"
+    >
+      <el-form
+        ref="formRef"
+        :model="transactionForm"
+        :rules="formRules"
+        label-position="top"
+      >
+        <el-form-item label="Account ID" prop="accountId">
+          <el-input
+            v-model="transactionForm.accountId"
+            maxlength="64"
+            placeholder="Enter account ID"
+          />
+        </el-form-item>
+
+        <el-form-item label="Payee ID" prop="payeeId">
+          <el-input
+            v-model="transactionForm.payeeId"
+            maxlength="64"
+            placeholder="Enter payee ID"
+          />
+        </el-form-item>
+
+        <el-form-item label="Amount" prop="amount">
+          <el-input-number
+            v-model="transactionForm.amount"
+            class="form-control"
+            :min="0.0001"
+            :precision="4"
+            :controls="false"
+            placeholder="Enter amount"
+          />
+        </el-form-item>
+
+        <el-form-item label="Currency" prop="currency">
+          <el-input
+            v-model="transactionForm.currency"
+            maxlength="3"
+            placeholder="Enter 3-letter currency code"
+          />
+        </el-form-item>
+
+        <el-form-item label="Type" prop="type">
+          <el-select
+            v-model="transactionForm.type"
+            class="form-control"
+            placeholder="Select transaction type"
+          >
+            <el-option
+              v-for="type in transactionTypeOptions"
+              :key="type"
+              :label="type"
+              :value="type"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="Description">
+          <el-input
+            v-model="transactionForm.description"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            placeholder="Enter description"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="dialogVisible = false">Cancel</el-button>
+        <el-button
+          type="primary"
+          :loading="submitting"
+          @click="createTransaction"
+        >
+          Save
+        </el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
 <style scoped>
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
 .page-heading {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 24px;
 }
 
 .page-heading h1 {
@@ -283,6 +480,13 @@ onMounted(loadTransactions)
   background: #eaf2ff;
 }
 
+.create-button {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
+  box-shadow: 0 7px 16px rgb(37 99 235 / 20%);
+}
+
 .transactions-error {
   margin-bottom: 20px;
 }
@@ -301,6 +505,10 @@ onMounted(loadTransactions)
 }
 
 .filter-grid :deep(.el-input-number) {
+  width: 100%;
+}
+
+.form-control {
   width: 100%;
 }
 
@@ -344,6 +552,11 @@ onMounted(loadTransactions)
 }
 
 @media (max-width: 720px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .filter-grid {
     grid-template-columns: 1fr;
   }
