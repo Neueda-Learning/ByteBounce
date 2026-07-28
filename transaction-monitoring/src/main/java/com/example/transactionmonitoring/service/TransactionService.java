@@ -5,9 +5,11 @@ import com.example.transactionmonitoring.dto.TransactionRequest;
 import com.example.transactionmonitoring.dto.TransactionResponse;
 import com.example.transactionmonitoring.entity.Transaction;
 import com.example.transactionmonitoring.exception.ResourceNotFoundException;
+import com.example.transactionmonitoring.messaging.TransactionCreatedEvent;
 import com.example.transactionmonitoring.repository.AlertRepository;
 import com.example.transactionmonitoring.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -30,7 +32,7 @@ public class TransactionService {
 
     private final TransactionRepository transactionRepository;
     private final AlertRepository alertRepository;
-    private final RuleEngineService ruleEngineService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public TransactionResponse createTransaction(TransactionRequest request) {
@@ -44,7 +46,7 @@ public class TransactionService {
         transaction.setDescription(request.description());
 
         Transaction savedTransaction = transactionRepository.save(transaction);
-        ruleEngineService.evaluate(savedTransaction);
+        eventPublisher.publishEvent(new TransactionCreatedEvent(savedTransaction.getId()));
         return toResponse(
                 savedTransaction,
                 Math.toIntExact(alertRepository.countByTransactionId(savedTransaction.getId()))
