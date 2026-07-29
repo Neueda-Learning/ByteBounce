@@ -546,7 +546,7 @@ onMounted(loadTransactions)
 }
 
 :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background: #f3f7ff !important;
+  background: #14283d !important;
 }
 
 @media (max-width: 1200px) {

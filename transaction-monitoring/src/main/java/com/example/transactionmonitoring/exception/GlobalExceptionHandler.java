@@ -1,14 +1,14 @@
 package com.example.transactionmonitoring.exception;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Converts application and validation exceptions into consistent HTTP errors.
@@ -81,6 +81,30 @@ public class GlobalExceptionHandler {
                                 exception.getMessage()
                 );
                 problem.setTitle("Unsupported currency");
+                return ResponseEntity.badRequest().body(problem);
+        }
+
+        @ExceptionHandler(AccountSuspendedException.class)
+        public ResponseEntity<ProblemDetail> handleAccountSuspended(
+                        AccountSuspendedException exception
+        ) {
+                ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                                HttpStatus.FORBIDDEN,
+                                exception.getMessage()
+                );
+                problem.setTitle("Account suspended");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+        }
+
+        @ExceptionHandler(TransactionLimitExceededException.class)
+        public ResponseEntity<ProblemDetail> handleTransactionLimitExceeded(
+                        TransactionLimitExceededException exception
+        ) {
+                ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                                HttpStatus.BAD_REQUEST,
+                                exception.getMessage()
+                );
+                problem.setTitle("Transaction limit exceeded");
                 return ResponseEntity.badRequest().body(problem);
         }
 }

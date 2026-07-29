@@ -1,7 +1,18 @@
 package com.example.transactionmonitoring.service;
 
-import com.example.transactionmonitoring.dto.PageResponse;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.transactionmonitoring.dto.AlertResponse;
+import com.example.transactionmonitoring.dto.PageResponse;
 import com.example.transactionmonitoring.entity.Alert;
 import com.example.transactionmonitoring.entity.AlertHistory;
 import com.example.transactionmonitoring.entity.AlertStatus;
@@ -12,17 +23,8 @@ import com.example.transactionmonitoring.exception.ResourceNotFoundException;
 import com.example.transactionmonitoring.repository.AlertHistoryRepository;
 import com.example.transactionmonitoring.repository.AlertRepository;
 import com.example.transactionmonitoring.repository.RuleRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Application service for querying alerts and managing their lifecycle.
@@ -49,6 +51,7 @@ public class AlertService {
     private final AlertRepository alertRepository;
     private final AlertHistoryRepository alertHistoryRepository;
     private final RuleRepository ruleRepository;
+    private final RiskAccountService riskAccountService;
 
     @Transactional(readOnly = true)
     public PageResponse<AlertResponse> getAllAlerts(int page, int size) {
@@ -132,6 +135,10 @@ public class AlertService {
         history.setNewStatus(newStatus);
         history.setChangedTime(changedTime);
         alertHistoryRepository.save(history);
+
+        if (newStatus == AlertStatus.DISMISSED) {
+            riskAccountService.releaseRisk(savedAlert.getId());
+        }
 
         return toResponse(savedAlert, findRule(savedAlert));
     }

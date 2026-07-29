@@ -1,22 +1,26 @@
 package com.example.transactionmonitoring.service;
 
-import com.example.transactionmonitoring.config.CurrencyConversionProperties;
-import com.example.transactionmonitoring.dto.DashboardStatisticsResponse;
-import com.example.transactionmonitoring.entity.AlertStatus;
-import com.example.transactionmonitoring.repository.AlertRepository;
-import com.example.transactionmonitoring.repository.TransactionRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Locale;
-import java.util.Map;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.example.transactionmonitoring.config.CurrencyConversionProperties;
+import com.example.transactionmonitoring.dto.DashboardStatisticsResponse;
+import com.example.transactionmonitoring.entity.AlertStatus;
+import com.example.transactionmonitoring.exception.UnsupportedCurrencyException;
+import com.example.transactionmonitoring.repository.AlertRepository;
+import com.example.transactionmonitoring.repository.TransactionRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Provides read-only aggregate data for the monitoring dashboard.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
@@ -41,10 +45,21 @@ public class DashboardService {
     private BigDecimal calculateTotalAmountInBaseCurrency() {
         return transactionRepository.findAll()
                 .stream()
-                .map(transaction -> currencyConversionService.convertToBase(
-                        transaction.getAmount(),
-                        transaction.getCurrency()
-                ))
+                .map(transaction -> {
+                    try {
+                        return currencyConversionService.convertToBase(
+                                transaction.getAmount(),
+                                transaction.getCurrency()
+                        );
+                    } catch (UnsupportedCurrencyException exception) {
+                        log.warn(
+                                "Skipping transaction {} from dashboard total: {}",
+                                transaction.getId(),
+                                exception.getMessage()
+                        );
+                        return BigDecimal.ZERO;
+                    }
+                })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 

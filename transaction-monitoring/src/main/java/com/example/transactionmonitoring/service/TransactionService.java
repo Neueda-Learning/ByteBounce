@@ -1,5 +1,19 @@
 package com.example.transactionmonitoring.service;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.example.transactionmonitoring.dto.PageResponse;
 import com.example.transactionmonitoring.dto.TransactionRequest;
 import com.example.transactionmonitoring.dto.TransactionResponse;
@@ -8,20 +22,8 @@ import com.example.transactionmonitoring.exception.ResourceNotFoundException;
 import com.example.transactionmonitoring.messaging.TransactionCreatedEvent;
 import com.example.transactionmonitoring.repository.AlertRepository;
 import com.example.transactionmonitoring.repository.TransactionRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Application service responsible for transaction management.
@@ -33,9 +35,17 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final AlertRepository alertRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final RiskAccountService riskAccountService;
 
     @Transactional
     public TransactionResponse createTransaction(TransactionRequest request) {
+        riskAccountService.assertTransactionAllowed(
+                request.accountId(),
+                request.payeeId(),
+                request.amount(),
+                request.currency()
+        );
+
         Transaction transaction = new Transaction();
         transaction.setAccountId(request.accountId());
         transaction.setPayeeId(request.payeeId());
