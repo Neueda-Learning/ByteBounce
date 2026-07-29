@@ -553,6 +553,6 @@ onMounted(loadRules)
 }
 
 :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background: #f8f5ff !important;
+  background: #14283d !important;
 }
 </style>
