@@ -7,6 +7,7 @@ import {
   Histogram,
   Money,
   PieChart,
+  Refresh,
   TrendCharts,
   Warning,
 } from '@element-plus/icons-vue'
@@ -46,6 +47,14 @@ let severityChart
 const riskLevelClass = computed(() =>
   riskOverview.level.toLowerCase().replace(' ', '-'),
 )
+
+const activeAlertRate = computed(() => {
+  if (!statistics.totalAlerts) {
+    return 0
+  }
+
+  return Math.round((statistics.openAlerts / statistics.totalAlerts) * 100)
+})
 
 const baseCurrencyLabel = computed(() => statistics.baseCurrency || 'USD')
 
@@ -168,7 +177,7 @@ const riskBarWidth = (count) => {
 }
 
 const buildHourlyTrend = (transactions) => {
-  const hourlyAmounts = new Map()
+  const hourlyActivity = new Map()
 
   transactions.forEach((transaction) => {
     const hour = parseUtcAwareDate(transaction.transactionTime)
@@ -177,14 +186,16 @@ const buildHourlyTrend = (transactions) => {
     }
     hour.setMinutes(0, 0, 0)
     const timestamp = hour.getTime()
-    hourlyAmounts.set(
-      timestamp,
-      (hourlyAmounts.get(timestamp) || 0) +
-        convertToBaseCurrency(transaction.amount, transaction.currency),
+    const current = hourlyActivity.get(timestamp) || { count: 0, amount: 0 }
+    current.count += 1
+    current.amount += convertToBaseCurrency(
+      transaction.amount,
+      transaction.currency,
     )
+    hourlyActivity.set(timestamp, current)
   })
 
-  return [...hourlyAmounts.entries()].sort(
+  return [...hourlyActivity.entries()].sort(
     ([leftTimestamp], [rightTimestamp]) => leftTimestamp - rightTimestamp,
   )
 }
@@ -216,31 +227,47 @@ const renderTransactionTrend = (transactions) => {
         color: '#ffffff',
       },
       formatter: (parameters) => {
-        const point = parameters[0]
+        const amountPoint = parameters.find(
+          (parameter) => parameter.seriesName === 'Amount',
+        )
+        const countPoint = parameters.find(
+          (parameter) => parameter.seriesName === 'Transactions',
+        )
+        const timestamp = parameters[0]?.value?.[0]
         return [
-          `<strong>${formatTrendTime(point.value[0], true)}</strong>`,
-          `Transaction Amount: ${formatNumber(point.value[1])} ${baseCurrencyLabel.value}`,
+          `<strong>${formatTrendTime(timestamp, true)}</strong>`,
+          `Transactions: ${formatNumber(countPoint?.value?.[1])}`,
+          `Amount: ${formatNumber(amountPoint?.value?.[1])} ${baseCurrencyLabel.value}`,
         ].join('<br>')
       },
     },
+    legend: {
+      top: 0,
+      right: 12,
+      itemWidth: 16,
+      itemHeight: 8,
+      textStyle: {
+        color: '#8fa2b7',
+      },
+    },
     grid: {
-      top: 28,
-      right: 28,
+      top: 42,
+      right: 68,
       bottom: 42,
-      left: 70,
+      left: 52,
     },
     xAxis: {
       type: 'time',
       boundaryGap: false,
       splitNumber: 6,
       axisLabel: {
-        color: '#7b8798',
+        color: '#70849a',
         hideOverlap: true,
         formatter: (value) => formatTrendTime(value, includeDate),
       },
       axisLine: {
         lineStyle: {
-          color: '#d9e1ec',
+          color: '#1b3047',
         },
       },
       axisTick: {
@@ -250,48 +277,89 @@ const renderTransactionTrend = (transactions) => {
         show: false,
       },
     },
-    yAxis: {
-      type: 'value',
-      axisLabel: {
-        color: '#7b8798',
-        formatter: (value) => formatNumber(value),
-      },
-      splitLine: {
-        lineStyle: {
-          color: '#edf1f6',
+    yAxis: [
+      {
+        type: 'value',
+        minInterval: 1,
+        name: 'Transactions',
+        nameTextStyle: {
+          color: '#60758c',
+        },
+        axisLabel: {
+          color: '#70849a',
+        },
+        splitLine: {
+          lineStyle: {
+            color: '#172b40',
+          },
         },
       },
-    },
+      {
+        type: 'value',
+        name: baseCurrencyLabel.value,
+        nameTextStyle: {
+          color: '#60758c',
+        },
+        axisLabel: {
+          color: '#70849a',
+          formatter: (value) => formatNumber(value),
+        },
+        splitLine: {
+          show: false,
+        },
+      },
+    ],
     series: [
       {
-        name: 'Hourly Amount',
+        name: 'Transactions',
         type: 'line',
         smooth: true,
         symbol: 'circle',
-        symbolSize: 8,
+        symbolSize: 6,
         showSymbol: trendData.length <= 16,
         lineStyle: {
-          width: 3,
-          color: '#4f7df3',
+          width: 2,
+          color: '#1687ff',
         },
         itemStyle: {
-          color: '#ffffff',
-          borderColor: '#4f7df3',
-          borderWidth: 3,
+          color: '#1687ff',
         },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             {
               offset: 0,
-              color: 'rgba(79, 125, 243, 0.30)',
+              color: 'rgba(22, 135, 255, 0.20)',
             },
             {
               offset: 1,
-              color: 'rgba(79, 125, 243, 0.02)',
+              color: 'rgba(22, 135, 255, 0.01)',
             },
           ]),
         },
-        data: trendData,
+        data: trendData.map(([timestamp, activity]) => [
+          timestamp,
+          activity.count,
+        ]),
+      },
+      {
+        name: 'Amount',
+        type: 'line',
+        yAxisIndex: 1,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        showSymbol: trendData.length <= 16,
+        lineStyle: {
+          width: 2,
+          color: '#14b8a6',
+        },
+        itemStyle: {
+          color: '#14b8a6',
+        },
+        data: trendData.map(([timestamp, activity]) => [
+          timestamp,
+          activity.amount,
+        ]),
       },
     ],
   })
@@ -346,56 +414,58 @@ const renderAlertTypeChart = (alerts) => {
       },
     },
     grid: {
-      top: 24,
-      right: 24,
-      bottom: 44,
-      left: 56,
+      top: 8,
+      right: 28,
+      bottom: 8,
+      left: 76,
     },
     xAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: {
+        color: '#70849a',
+        fontSize: 9,
+      },
+      splitLine: {
+        lineStyle: {
+          color: '#172b40',
+        },
+      },
+    },
+    yAxis: {
       type: 'category',
+      inverse: true,
       data: ruleTypes.map((ruleType) => ruleType.label),
       axisLabel: {
-        interval: 0,
-        color: '#64748b',
-        fontSize: 11,
+        color: '#8fa2b7',
+        fontSize: 9,
       },
       axisLine: {
         lineStyle: {
-          color: '#d9e1ec',
+          color: '#1b3047',
         },
       },
       axisTick: {
         show: false,
       },
     },
-    yAxis: {
-      type: 'value',
-      minInterval: 1,
-      axisLabel: {
-        color: '#7b8798',
-      },
-      splitLine: {
-        lineStyle: {
-          color: '#edf1f6',
-        },
-      },
-    },
     series: [
       {
         name: 'Alerts',
         type: 'bar',
-        barMaxWidth: 48,
+        barMaxWidth: 14,
         data: ruleTypes.map((ruleType) => ({
           value: typeCounts[ruleType.key] || 0,
           itemStyle: {
             color: ruleType.color,
-            borderRadius: [7, 7, 0, 0],
+            borderRadius: [0, 7, 7, 0],
           },
         })),
         label: {
           show: true,
-          position: 'top',
-          color: '#64748b',
+          position: 'right',
+          color: '#8fa2b7',
+          fontSize: 9,
           fontWeight: 600,
         },
       },
@@ -440,7 +510,7 @@ const renderSeverityChart = (alerts) => {
       itemWidth: 14,
       itemHeight: 8,
       textStyle: {
-        color: '#64748b',
+        color: '#8fa2b7',
       },
     },
     series: [
@@ -451,7 +521,7 @@ const renderSeverityChart = (alerts) => {
         center: ['50%', '45%'],
         avoidLabelOverlap: true,
         label: {
-          color: '#475569',
+          color: '#a9b8c8',
           formatter: '{b}\n{c}',
         },
         labelLine: {
@@ -546,9 +616,8 @@ onBeforeUnmount(() => {
   <section v-loading="loading" class="dashboard-page">
     <div class="page-heading">
       <div>
-        <span class="page-eyebrow">Overview</span>
         <h1>Dashboard</h1>
-        <p>Live transaction activity and risk monitoring summary.</p>
+        <p>Overview of transaction monitoring and alerts</p>
       </div>
       <div class="live-status">
         <span class="live-indicator">
@@ -556,6 +625,14 @@ onBeforeUnmount(() => {
           Live data
         </span>
         <small>Last updated: {{ lastUpdated || '—' }}</small>
+        <el-button
+          class="refresh-button"
+          :loading="loading"
+          :icon="Refresh"
+          @click="loadDashboard"
+        >
+          Refresh
+        </el-button>
       </div>
     </div>
 
@@ -635,65 +712,49 @@ onBeforeUnmount(() => {
       </el-card>
     </div>
 
-    <el-card class="risk-overview-card" shadow="never">
-      <div class="risk-overview">
-        <div class="risk-summary">
-          <span class="section-eyebrow">Risk Overview</span>
-          <div class="risk-score" :class="riskLevelClass">
-            {{ riskOverview.score }}
-          </div>
-          <el-tag
-            class="risk-level-tag"
-            :type="severityTagType(riskOverview.level.split(' ')[0])"
-            effect="light"
-          >
-            {{ riskOverview.level }}
-          </el-tag>
-          <p>Current risk level based on active alerts</p>
-        </div>
-
-        <div class="risk-breakdown">
-          <div
-            v-for="item in [
-              { label: 'HIGH', value: riskOverview.high },
-              { label: 'MEDIUM', value: riskOverview.medium },
-              { label: 'LOW', value: riskOverview.low },
-            ]"
-            :key="item.label"
-            class="risk-row"
-          >
-            <div class="risk-row-heading">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
+    <div class="overview-grid">
+      <el-card class="risk-overview-card" shadow="never">
+        <div class="risk-overview">
+          <div class="risk-summary">
+            <span class="section-eyebrow">Risk Overview</span>
+            <div class="risk-score" :class="riskLevelClass">
+              {{ riskOverview.score }}
             </div>
-            <div class="risk-track">
-              <span
-                :class="`risk-fill risk-fill--${item.label.toLowerCase()}`"
-                :style="{ width: riskBarWidth(item.value) }"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </el-card>
-
-    <div class="charts-grid">
-      <el-card class="chart-card" shadow="hover">
-        <template #header>
-          <div class="chart-title">
-            <span class="chart-title-icon">
-              <el-icon><TrendCharts /></el-icon>
+            <span class="risk-level-badge" :class="riskLevelClass">
+              {{ riskOverview.level }}
             </span>
-            <div>
-              <strong>Transaction Activity</strong>
-              <small>Hourly monitored volume in {{ baseCurrencyLabel }}</small>
+            <p>Current risk level based on active alerts</p>
+            <span class="active-rate">
+              {{ activeAlertRate }}% of alerts currently open
+            </span>
+          </div>
+
+          <div class="risk-breakdown">
+            <div
+              v-for="item in [
+                { label: 'HIGH', value: riskOverview.high },
+                { label: 'MEDIUM', value: riskOverview.medium },
+                { label: 'LOW', value: riskOverview.low },
+              ]"
+              :key="item.label"
+              class="risk-row"
+            >
+              <div class="risk-row-heading">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
+              <div class="risk-track">
+                <span
+                  :class="`risk-fill risk-fill--${item.label.toLowerCase()}`"
+                  :style="{ width: riskBarWidth(item.value) }"
+                />
+              </div>
             </div>
           </div>
-        </template>
-        <div ref="transactionTrendRef" class="chart" />
+        </div>
       </el-card>
 
-      <el-card class="chart-card" shadow="hover">
+      <el-card class="rule-chart-card chart-card" shadow="hover">
         <template #header>
           <div class="chart-title">
             <span class="chart-title-icon">
@@ -701,26 +762,86 @@ onBeforeUnmount(() => {
             </span>
             <div>
               <strong>Triggered Rules</strong>
-              <small>Color-coded monitoring rule triggers</small>
+              <small>Alerts by monitoring rule</small>
             </div>
           </div>
         </template>
-        <div ref="alertTypeRef" class="chart" />
+        <div ref="alertTypeRef" class="chart chart--rule" />
+      </el-card>
+    </div>
+
+    <div class="analytics-grid">
+      <el-card class="chart-card transaction-chart-card" shadow="hover">
+        <template #header>
+          <div class="chart-title">
+            <span class="chart-title-icon">
+              <el-icon><TrendCharts /></el-icon>
+            </span>
+            <div>
+              <strong>Transaction Trend</strong>
+              <small>Hourly transaction count and monitored amount</small>
+            </div>
+          </div>
+        </template>
+        <div ref="transactionTrendRef" class="chart" />
       </el-card>
 
-      <el-card class="chart-card" shadow="hover">
+      <el-card class="chart-card severity-chart-card" shadow="hover">
         <template #header>
           <div class="chart-title">
             <span class="chart-title-icon">
               <el-icon><PieChart /></el-icon>
             </span>
             <div>
-              <strong>Risk Severity Distribution</strong>
-              <small>Risk concentration by severity</small>
+              <strong>Risk Level Distribution</strong>
+              <small>Alerts grouped by severity</small>
             </div>
           </div>
         </template>
-        <div ref="severityRef" class="chart" />
+        <div ref="severityRef" class="chart chart--compact" />
+      </el-card>
+
+      <el-card class="top-risk-card" shadow="hover">
+        <template #header>
+          <div class="chart-title">
+            <span class="chart-title-icon">
+              <el-icon><Warning /></el-icon>
+            </span>
+            <div>
+              <strong>Top Risky Transactions</strong>
+              <small>Highest-priority monitored activity</small>
+            </div>
+          </div>
+        </template>
+        <div v-if="recentAlerts.length" class="top-risk-list">
+          <div
+            v-for="(alert, index) in recentAlerts"
+            :key="`risk-${alert.id}`"
+            class="top-risk-item"
+          >
+            <span
+              class="risk-rank"
+              :class="`risk-rank--${alert.severity?.toLowerCase()}`"
+            >
+              {{ index + 1 }}
+            </span>
+            <div class="top-risk-details">
+              <strong>Transaction #{{ alert.transactionId }}</strong>
+              <span v-if="alert.amount != null">
+                {{ formatNumber(alert.amount) }} {{ alert.currency || '' }}
+              </span>
+              <span v-else>{{ alert.ruleName || alert.ruleType }}</span>
+            </div>
+            <el-tag :type="severityTagType(alert.severity)" effect="dark">
+              {{ alert.severity }}
+            </el-tag>
+          </div>
+        </div>
+        <el-empty
+          v-else
+          :image-size="58"
+          description="No risk events"
+        />
       </el-card>
     </div>
 
@@ -729,39 +850,49 @@ onBeforeUnmount(() => {
         <div class="recent-alerts-heading">
           <div>
             <span class="section-eyebrow">Risk Feed</span>
-            <h2>Recent Critical Alerts</h2>
+            <h2>Recent Alerts</h2>
             <p>Latest events prioritized by severity.</p>
           </div>
           <span class="recent-count">{{ recentAlerts.length }} events</span>
         </div>
       </template>
 
-      <div v-if="recentAlerts.length" class="recent-alerts-list">
-        <article
+      <div v-if="recentAlerts.length" class="recent-alerts-table">
+        <div class="recent-alerts-row recent-alerts-row--header">
+          <span>Alert ID</span>
+          <span>Time</span>
+          <span>Transaction</span>
+          <span>Rule Triggered</span>
+          <span>Amount</span>
+          <span>Risk Level</span>
+          <span>Status</span>
+        </div>
+        <div
           v-for="alert in recentAlerts"
           :key="alert.id"
-          class="recent-alert-item"
+          class="recent-alerts-row"
         >
-          <div class="alert-severity">
-            <el-tag :type="severityTagType(alert.severity)" effect="light">
+          <strong>#{{ alert.id }}</strong>
+          <time>{{ formatAlertTime(alert.createdTime) }}</time>
+          <span>#{{ alert.transactionId }}</span>
+          <span class="rule-name">{{ alert.ruleName || alert.ruleType }}</span>
+          <span class="alert-amount">
+            <template v-if="alert.amount != null">
+              {{ formatNumber(alert.amount) }} {{ alert.currency || '' }}
+            </template>
+            <template v-else>—</template>
+          </span>
+          <span>
+            <el-tag :type="severityTagType(alert.severity)" effect="dark">
               {{ alert.severity }}
             </el-tag>
-          </div>
-          <div class="alert-description">
-            <strong>{{ alert.ruleName || alert.ruleType }}</strong>
-            <span>Transaction #{{ alert.transactionId }}</span>
-            <span v-if="alert.amount != null" class="alert-amount">
-              Amount: {{ formatNumber(alert.amount) }}
-              {{ alert.currency || '' }}
-            </span>
-          </div>
-          <div class="alert-meta">
+          </span>
+          <span>
             <el-tag :type="statusTagType(alert.status)" effect="plain">
               {{ alert.status }}
             </el-tag>
-            <time>{{ formatAlertTime(alert.createdTime) }}</time>
-          </div>
-        </article>
+          </span>
+        </div>
       </div>
 
       <el-empty
@@ -1035,6 +1166,33 @@ onBeforeUnmount(() => {
   letter-spacing: 0.45px;
 }
 
+.risk-level-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 10px;
+  border: 1px solid rgb(34 197 94 / 24%);
+  border-radius: 5px;
+  color: #66d79c;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.45px;
+  line-height: 1;
+  background: rgb(34 197 94 / 10%);
+}
+
+.risk-level-badge.medium-risk {
+  border-color: rgb(245 158 11 / 26%);
+  color: #f5b84f;
+  background: rgb(245 158 11 / 10%);
+}
+
+.risk-level-badge.high-risk {
+  border-color: rgb(239 68 68 / 28%);
+  color: #ff7b87;
+  background: rgb(239 68 68 / 11%);
+}
+
 .risk-summary p {
   margin: 13px 0 0;
   color: #94a3b8;
@@ -1298,6 +1456,539 @@ onBeforeUnmount(() => {
     align-items: flex-start;
     flex-direction: column;
     gap: 12px;
+  }
+}
+
+/* Dark financial monitoring presentation */
+.dashboard-page {
+  color: #dbe7f5;
+}
+
+.page-heading {
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-heading h1 {
+  margin: 0 0 6px;
+  color: #f3f7fc;
+  font-size: 30px;
+}
+
+.page-heading p {
+  color: #8a9db2;
+}
+
+.live-status {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-items: end;
+  gap: 7px 12px;
+}
+
+.live-indicator {
+  border-color: rgb(52 211 153 / 20%);
+  color: #72e1ad;
+  background: rgb(16 185 129 / 8%);
+}
+
+.live-status small {
+  color: #657b92;
+}
+
+.refresh-button {
+  grid-column: 1 / -1;
+  border-color: rgb(22 135 255 / 38%);
+  color: #66b1ff;
+  background: rgb(22 135 255 / 8%);
+}
+
+.refresh-button:hover,
+.refresh-button:focus {
+  border-color: #1687ff;
+  color: #ffffff;
+  background: rgb(22 135 255 / 22%);
+}
+
+.statistics-grid {
+  gap: 16px;
+}
+
+.statistic-card {
+  --statistic-accent: #1687ff;
+  --statistic-soft: rgb(22 135 255 / 16%);
+  --statistic-border: rgb(22 135 255 / 22%);
+  min-height: 148px;
+  border-color: var(--statistic-border);
+  border-radius: 11px;
+  background:
+    linear-gradient(145deg, rgb(17 53 93 / 96%), rgb(8 31 56 / 98%));
+  box-shadow: 0 12px 30px rgb(0 0 0 / 20%);
+}
+
+.statistic-card:hover {
+  box-shadow: 0 16px 36px rgb(0 0 0 / 28%);
+}
+
+.statistic-card::before {
+  width: 2px;
+}
+
+.statistic-card::after {
+  top: auto;
+  right: -18px;
+  bottom: -72px;
+  width: 190px;
+  height: 130px;
+  border-radius: 50%;
+  opacity: 0.09;
+  filter: blur(1px);
+}
+
+.statistic-card :deep(.el-card__body) {
+  padding: 19px 20px;
+}
+
+.statistic-card--blue {
+  --statistic-accent: #1687ff;
+  --statistic-soft: rgb(22 135 255 / 16%);
+  --statistic-border: rgb(22 135 255 / 23%);
+}
+
+.statistic-card--green {
+  --statistic-accent: #12b886;
+  --statistic-soft: rgb(18 184 134 / 15%);
+  --statistic-border: rgb(18 184 134 / 22%);
+  background: linear-gradient(145deg, #0b4a3f, #0a2c2c);
+}
+
+.statistic-card--amber {
+  --statistic-accent: #f59e0b;
+  --statistic-soft: rgb(245 158 11 / 16%);
+  --statistic-border: rgb(245 158 11 / 24%);
+  background: linear-gradient(145deg, #553a15, #292615);
+}
+
+.statistic-card--red {
+  --statistic-accent: #f04455;
+  --statistic-soft: rgb(240 68 85 / 16%);
+  --statistic-border: rgb(240 68 85 / 25%);
+  background: linear-gradient(145deg, #54212d, #2e1824);
+}
+
+.statistic-content {
+  min-height: 104px;
+}
+
+.statistic-header {
+  width: 100%;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+}
+
+.statistic-icon {
+  border-color: rgb(255 255 255 / 8%);
+  color: #ffffff;
+  background: var(--statistic-accent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--statistic-accent) 28%, transparent);
+}
+
+.statistic-label {
+  color: #d8e5f1;
+  font-size: 12px;
+}
+
+.statistic-value {
+  margin-top: 12px;
+  color: #ffffff;
+  font-size: clamp(27px, 1.85vw, 34px);
+}
+
+.statistic-value small {
+  color: #a9bbcc;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+}
+
+.statistic-description {
+  color: #9aafc4;
+}
+
+.risk-overview-card,
+.chart-card,
+.top-risk-card,
+.recent-alerts-card {
+  border-color: #1b3047;
+  border-radius: 11px;
+  background:
+    linear-gradient(145deg, rgb(14 31 50 / 98%), rgb(10 24 40 / 98%));
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+}
+
+.risk-overview-card {
+  height: 250px;
+  margin-bottom: 0;
+  background:
+    radial-gradient(circle at 8% 18%, rgb(22 135 255 / 10%), transparent 30%),
+    linear-gradient(145deg, #0d1c2e, #0a1828);
+}
+
+.risk-overview-card :deep(.el-card__body) {
+  height: 100%;
+  padding: 22px 26px;
+}
+
+.risk-score {
+  margin: 10px 0 8px;
+  font-size: 46px;
+}
+
+.risk-summary {
+  border-right-color: #1b3047;
+}
+
+.section-eyebrow {
+  color: #6f87a0;
+}
+
+.risk-summary p {
+  color: #8296aa;
+}
+
+.active-rate {
+  display: block;
+  margin-top: 7px;
+  color: #5e748b;
+  font-size: 10px;
+}
+
+.risk-row-heading {
+  color: #8095aa;
+}
+
+.risk-row-heading strong {
+  color: #dbe7f5;
+}
+
+.risk-track {
+  background: #14283d;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.overview-grid .risk-overview-card {
+  grid-column: span 3;
+}
+
+.overview-grid .rule-chart-card {
+  grid-column: span 1;
+  height: 250px;
+  margin-top: 0;
+  overflow: hidden;
+}
+
+.overview-grid .rule-chart-card :deep(.el-card__header) {
+  padding: 14px 15px;
+}
+
+.overview-grid .rule-chart-card :deep(.el-card__body) {
+  padding: 6px 10px 8px;
+  overflow: hidden;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.analytics-grid .transaction-chart-card {
+  grid-column: span 2;
+}
+
+.analytics-grid .severity-chart-card,
+.analytics-grid .top-risk-card {
+  grid-column: span 1;
+}
+
+.analytics-grid > .el-card {
+  height: 375px;
+  overflow: hidden;
+}
+
+.chart-card :deep(.el-card__header),
+.top-risk-card :deep(.el-card__header),
+.recent-alerts-card :deep(.el-card__header) {
+  padding: 16px 18px;
+  border-bottom-color: #1b3047;
+}
+
+.chart-card :deep(.el-card__body) {
+  padding: 12px 14px 14px;
+  overflow: hidden;
+}
+
+.chart-title-icon {
+  color: #50a7ff;
+  background: rgb(22 135 255 / 11%);
+}
+
+.chart-title strong {
+  color: #e3edf7;
+}
+
+.chart-title small {
+  color: #71869c;
+}
+
+.analytics-grid .chart-title {
+  gap: 9px;
+}
+
+.analytics-grid .chart-title-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.analytics-grid .chart-title strong {
+  font-size: 12.5px;
+}
+
+.analytics-grid .chart-title small {
+  font-size: 10px;
+}
+
+.chart {
+  height: 275px;
+}
+
+.chart--compact {
+  height: 275px;
+}
+
+.rule-chart-card {
+  margin-top: 0;
+}
+
+.chart--rule {
+  height: 168px;
+}
+
+.top-risk-card :deep(.el-card__body) {
+  padding: 7px 16px 10px;
+}
+
+.top-risk-list {
+  display: grid;
+}
+
+.top-risk-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 55px;
+  border-bottom: 1px solid #172b40;
+}
+
+.top-risk-item:last-child {
+  border-bottom: 0;
+}
+
+.risk-rank {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 50%;
+  color: #9cb0c4;
+  font-size: 10px;
+  background: #14283d;
+}
+
+.risk-rank--high {
+  color: #ff8b98;
+  background: rgb(239 68 68 / 18%);
+}
+
+.risk-rank--medium {
+  color: #ffc45c;
+  background: rgb(245 158 11 / 18%);
+}
+
+.risk-rank--low {
+  color: #62dab0;
+  background: rgb(16 185 129 / 16%);
+}
+
+.top-risk-details {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.top-risk-details strong,
+.top-risk-details span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-risk-details strong {
+  color: #dbe7f5;
+  font-size: 11px;
+}
+
+.top-risk-details span {
+  color: #71869c;
+  font-size: 10px;
+}
+
+.recent-alerts-card {
+  overflow: hidden;
+}
+
+.recent-alerts-card :deep(.el-card__body) {
+  padding: 0;
+}
+
+.recent-alerts-heading h2 {
+  color: #e3edf7;
+}
+
+.recent-alerts-heading p {
+  color: #71869c;
+}
+
+.recent-count {
+  color: #8fa2b7;
+  background: #14283d;
+}
+
+.recent-alerts-table {
+  min-width: 940px;
+  overflow: hidden;
+}
+
+.recent-alerts-row {
+  display: grid;
+  grid-template-columns:
+    minmax(76px, 0.7fr)
+    minmax(120px, 1.15fr)
+    minmax(92px, 0.8fr)
+    minmax(150px, 1.5fr)
+    minmax(112px, 0.95fr)
+    minmax(92px, 0.75fr)
+    minmax(112px, 0.9fr);
+  align-items: center;
+  min-height: 50px;
+  padding: 0 18px;
+  border-bottom: 1px solid #172b40;
+  color: #a9bacb;
+  font-size: 11px;
+}
+
+.recent-alerts-row:not(.recent-alerts-row--header):hover {
+  background: rgb(22 135 255 / 5%);
+}
+
+.recent-alerts-row:last-child {
+  border-bottom: 0;
+}
+
+.recent-alerts-row--header {
+  min-height: 43px;
+  color: #71869c;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  background: #101f32;
+}
+
+.recent-alerts-row strong {
+  color: #64b1ff;
+}
+
+.recent-alerts-row time {
+  color: #8296aa;
+  font-variant-numeric: tabular-nums;
+}
+
+.recent-alerts-row .rule-name {
+  overflow: hidden;
+  color: #d0dce8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-alerts-row .alert-amount {
+  color: #dbe7f5;
+  font-weight: 650;
+}
+
+@media (max-width: 1200px) {
+  .analytics-grid,
+  .overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analytics-grid .transaction-chart-card {
+    grid-column: span 2;
+  }
+
+  .overview-grid .risk-overview-card,
+  .overview-grid .rule-chart-card {
+    grid-column: span 2;
+  }
+
+  .overview-grid .rule-chart-card {
+    height: 300px;
+  }
+
+  .overview-grid .chart--rule {
+    height: 215px;
+  }
+
+  .analytics-grid > .el-card {
+    height: auto;
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 900px) {
+  .analytics-grid,
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-grid .transaction-chart-card,
+  .analytics-grid .severity-chart-card,
+  .analytics-grid .top-risk-card,
+  .overview-grid .risk-overview-card,
+  .overview-grid .rule-chart-card {
+    grid-column: span 1;
+  }
+
+  .risk-summary {
+    border-right: 0;
+    border-bottom-color: #1b3047;
+  }
+
+  .recent-alerts-card :deep(.el-card__body) {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .live-status {
+    justify-items: start;
   }
 }
 </style>
