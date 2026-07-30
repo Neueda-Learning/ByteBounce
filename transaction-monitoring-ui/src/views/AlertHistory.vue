@@ -95,6 +95,9 @@ onMounted(loadHistory)
           {{ formatDateTime(row.changedTime) }}
         </template>
       </el-table-column>
+      <el-table-column label="Operator" min-width="140">
+        <template #default>Administrator</template>
+      </el-table-column>
     </el-table>
     <div class="pagination-wrapper">
       <el-pagination
