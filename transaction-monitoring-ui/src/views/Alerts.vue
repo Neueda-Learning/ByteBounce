@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Bell,
@@ -11,6 +11,7 @@ import {
 } from '@element-plus/icons-vue'
 import http from '../api/axios'
 import { formatDateTime } from '../utils/dateTime'
+import { subscribeToTransactionUpdates } from '../utils/notificationStream'
 
 const alerts = ref([])
 const loading = ref(false)
@@ -243,7 +244,18 @@ const updateAlertStatus = async () => {
   }
 }
 
-onMounted(loadAlerts)
+let unsubscribeUpdates = null
+
+onMounted(() => {
+  loadAlerts()
+  unsubscribeUpdates = subscribeToTransactionUpdates(() => {
+    loadCurrentPage()
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeUpdates?.()
+})
 </script>
 
 <template>
@@ -562,6 +574,7 @@ onMounted(loadAlerts)
                     'Alert status updated'
                   }}
                 </span>
+                <span class="timeline-operator">Operator: Administrator</span>
               </div>
             </el-timeline-item>
           </el-timeline>
@@ -797,12 +810,19 @@ onMounted(loadAlerts)
 .timeline-event {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 11px;
 }
 
 .timeline-event span {
   color: #64748b;
   font-size: 12px;
+}
+
+.timeline-operator {
+  margin-left: auto;
+  color: #94a3b8 !important;
+  font-style: italic;
 }
 
 :deep(.el-descriptions__label) {

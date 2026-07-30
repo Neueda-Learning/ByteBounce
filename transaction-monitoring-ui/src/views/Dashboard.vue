@@ -14,6 +14,7 @@ import {
 import * as echarts from 'echarts'
 import http from '../api/axios'
 import { formatDateTime, parseUtcAwareDate, toTimestamp } from '../utils/dateTime'
+import { subscribeToTransactionUpdates } from '../utils/notificationStream'
 
 const loading = ref(false)
 const errorMessage = ref('')
@@ -599,13 +600,19 @@ const resizeCharts = () => {
   severityChart?.resize()
 }
 
+let unsubscribeUpdates = null
+
 onMounted(() => {
   window.addEventListener('resize', resizeCharts)
   loadDashboard()
+  unsubscribeUpdates = subscribeToTransactionUpdates(() => {
+    loadDashboard()
+  })
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeCharts)
+  unsubscribeUpdates?.()
   transactionTrendChart?.dispose()
   alertTypeChart?.dispose()
   severityChart?.dispose()

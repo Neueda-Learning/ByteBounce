@@ -1,9 +1,10 @@
 <script setup>
-import { nextTick, onMounted, reactive, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CreditCard, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import http from '../api/axios'
 import { formatDateTime } from '../utils/dateTime'
+import { subscribeToTransactionUpdates } from '../utils/notificationStream'
 
 const transactions = ref([])
 const loading = ref(false)
@@ -208,7 +209,18 @@ const resetFilters = () => {
   loadTransactions()
 }
 
-onMounted(loadTransactions)
+let unsubscribeUpdates = null
+
+onMounted(() => {
+  loadTransactions()
+  unsubscribeUpdates = subscribeToTransactionUpdates(() => {
+    loadCurrentPage()
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeUpdates?.()
+})
 </script>
 
 <template>

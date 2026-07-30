@@ -3,6 +3,7 @@ package com.example.transactionmonitoring.service;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -10,6 +11,7 @@ import com.example.transactionmonitoring.entity.Alert;
 import com.example.transactionmonitoring.entity.AlertStatus;
 import com.example.transactionmonitoring.entity.Rule;
 import com.example.transactionmonitoring.entity.Transaction;
+import com.example.transactionmonitoring.messaging.TransactionEvaluatedEvent;
 import com.example.transactionmonitoring.repository.AlertRepository;
 import com.example.transactionmonitoring.repository.RuleRepository;
 import com.example.transactionmonitoring.rule.RuleChecker;
@@ -27,6 +29,7 @@ public class RuleEngineService {
     private final AlertRepository alertRepository;
     private final List<RuleChecker> ruleCheckers;
     private final RiskAccountService riskAccountService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public List<Alert> evaluate(Transaction transaction) {
@@ -44,6 +47,9 @@ public class RuleEngineService {
         }
 
         if (triggeredAlerts.isEmpty()) {
+            eventPublisher.publishEvent(
+                    new TransactionEvaluatedEvent(transaction.getId(), 0)
+            );
             return List.of();
         }
 
@@ -55,6 +61,9 @@ public class RuleEngineService {
                     triggeredRules.get(i)
             );
         }
+        eventPublisher.publishEvent(
+                new TransactionEvaluatedEvent(transaction.getId(), savedAlerts.size())
+        );
         return savedAlerts;
     }
 
